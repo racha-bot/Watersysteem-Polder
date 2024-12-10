@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # Titel en introductie
 st.title("Polder Watersysteem Digital Twin")
 st.write("""
-Welkom bij de interactieve simulatie van een polder watersysteem. 
+Welkom bij de interactieve hiii simulatie van een polder watersysteem. 
 Hier kun je parameters aanpassen en zien hoe het waterpeil verandert over tijd.
 """)
 
