@@ -1,65 +1,83 @@
 import streamlit as st
-import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import numpy as np
 
-# Titel en introductie
-st.title("Polder Watersysteem Digital Twin")
-st.write("""
-Welkom bij de interactieve hiii simulatie van een polder watersysteem. 
-Hier kun je parameters aanpassen en zien hoe het waterpeil verandert over tijd.
-""")
+# Functie om 2D-coördinaten te extruderen naar 3D
+def extrude_2d_to_3d(x, y, depth):
+    front = [(x[i], y[i], 0) for i in range(len(x))]
+    back = [(x[i], y[i], depth) for i in range(len(x))]
+    return front, back
 
-# Sidebar voor gebruikersinvoer
-st.sidebar.header("Gebruikersinvoer")
-oppervlakte = st.sidebar.number_input("Oppervlakte (in hectare)", value=100.0, min_value=1.0)
-verhard_percentage = st.sidebar.slider("Percentage verhard oppervlak", 0, 100, 30)
-onverhard_percentage = 100 - verhard_percentage  # Automatisch berekend
-neerslag = st.sidebar.slider("Dagelijkse neerslag (mm)", 0, 100, 20)
-verdamping = st.sidebar.slider("Dagelijkse verdamping (mm)", 0, 50, 5)
-gemaalcapaciteit = st.sidebar.number_input("Gemaalcapaciteit (mm/dag)", value=15, min_value=0)
+# Functie om een trapezium in 3D te tekenen
+def draw_trapezoid_3d(ax, x, y, z, bottom_width, height, depth):
+    bottom_width *= 2
+    top_width = bottom_width + height
 
-# Simulatieparameters
-dagen = 30  # Simulatie loopt 30 dagen
-waterhoogte = [50]  # Startwaterhoogte in cm
+    left_bottom_front = (x - bottom_width / 2, y, z)
+    right_bottom_front = (x + bottom_width / 2, y, z)
+    left_top_front = (left_bottom_front[0] - height / 2, y + height, z)
+    right_top_front = (right_bottom_front[0] + height / 2, y + height, z)
 
-# Simulatie
-for dag in range(1, dagen + 1):
-    regen = neerslag * (oppervlakte * verhard_percentage / 100) / 100  # Water van verhard oppervlak
-    afvoer = verdamping + (gemaalcapaciteit if waterhoogte[-1] > 60 else 0)
-    nieuw_peil = waterhoogte[-1] + regen - afvoer
-    waterhoogte.append(max(nieuw_peil, 0))
+    left_bottom_back = (x - bottom_width / 2, y, z + depth)
+    right_bottom_back = (x + bottom_width / 2, y, z + depth)
+    left_top_back = (left_bottom_back[0] - height / 2, y + height, z + depth)
+    right_top_back = (right_bottom_back[0] + height / 2, y + height, z + depth)
 
-# Grafiek visualisatie
-st.header("Simulatie Resultaten")
-fig, ax = plt.subplots()
-ax.plot(range(dagen + 1), waterhoogte, label="Waterhoogte (cm)", color="blue")
-ax.axhline(60, color="red", linestyle="--", label="Gemaaldrempel")
-ax.set_title("Waterpeil over Tijd")
-ax.set_xlabel("Dag")
-ax.set_ylabel("Waterhoogte (cm)")
-ax.legend()
-ax.grid()
+    vertices = [
+        [left_bottom_front, right_bottom_front, right_top_front, left_top_front],
+        [left_bottom_back, right_bottom_back, right_top_back, left_top_back],
+        [left_bottom_front, left_top_front, left_top_back, left_bottom_back],
+        [right_bottom_front, right_top_front, right_top_back, right_bottom_back],
+        [left_top_front, right_top_front, right_top_back, left_top_back],
+        [left_bottom_front, right_bottom_front, right_bottom_back, left_bottom_back],
+    ]
 
-st.pyplot(fig)
+    for face in vertices:
+        ax.add_collection3d(Poly3DCollection([face], color='white', edgecolor='blue', alpha=0.7))
 
-# Kaart (Mock visualisatie)
-st.header("Polder Kaart (Mockup)")
-st.write("Hier kun je een kaart van de polder laten zien met hoogtes en waterniveaus.")
-x, y = np.meshgrid(np.linspace(0, 10, 100), np.linspace(0, 10, 100))
-hoogtekaart = np.sin(x) * np.cos(y) * 5 + 50  # Mock hoogte in cm
-fig2, ax2 = plt.subplots()
-im = ax2.imshow(hoogtekaart, cmap="viridis", origin="lower")
-plt.colorbar(im, ax=ax2, label="Waterhoogte (cm)")
-ax2.set_title("Waterhoogte Kaart")
-ax2.set_xlabel("x (km)")
-ax2.set_ylabel("y (km)")
+# Functie om de 3D-dijk te tekenen
+def draw_dijk_3d(grondtype, hoogte, gemaal_capacity, werkuren):
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    depth = 10
+    
+    x_dijk = np.array([-3, -2.50, -1.5, -0.5, 0.5, 1, 1.5, 2.5, 3.5, 4, 8.5, 9, 10, 11, 11.5, 12, 13, 14, 15, 15.5]) * 2
+    y_dijk = np.array([2, 5, 5, 3, 3, 4, 4, 2, 2, 3, 3, 2, 2, 4, 4, 3, 3, 5, 5, 2]) * 2
+    
+    front, back = extrude_2d_to_3d(x_dijk, y_dijk, depth)
+    
+    dijk_color = {"Zand": "yellow", "Klei": "blue", "Veen": "purple"}.get(grondtype, "brown")
+    
+    for i in range(len(front) - 1):
+        vertices = [front[i], front[i + 1], back[i + 1], back[i]]
+        ax.add_collection3d(Poly3DCollection([vertices], color=dijk_color, alpha=0.7))
+    
+    ax.add_collection3d(Poly3DCollection([front], color=dijk_color, alpha=0.5))
+    ax.add_collection3d(Poly3DCollection([back], color=dijk_color, alpha=0.5))
 
-st.pyplot(fig2)
+    offset = 3
+    draw_trapezoid_3d(ax, 3 - offset, 6, 0, 1, 1.5, depth)
+    draw_trapezoid_3d(ax, 9 - offset, 4, 0, 1, hoogte, depth)
+    draw_trapezoid_3d(ax, 16 + offset, 4, 0, 1, hoogte, depth)
+    draw_trapezoid_3d(ax, 22 + offset, 6, 0, 1, 1.5, depth)
+    
+    ax.set_xlim(-5, 30)
+    ax.set_ylim(0, 15)
+    ax.set_zlim(-5, 15)
 
-# Toekomstige uitbreiding
-st.header("Toekomstige Uitbreiding")
-st.write("""
-- Geavanceerdere kaarten en simulaties
-- Koppeling met het wiskundige model
-- Scenario's voor klimaatverandering en extreme weersomstandigheden
-""")
+    ax.view_init(elev=100, azim=-90)
+    st.pyplot(fig)
+
+# Streamlit UI
+st.title("3D Dijk Visualisatie")
+
+grondtype = st.selectbox("Kies het grondtype:", ["Zand", "Klei", "Veen"])
+neerslag = st.slider("Hoeveelheid neerslag (mm):", 0, 200, 50)
+oppervlakte = st.number_input("Oppervlakte (m²):", value=1000, min_value=1)
+gemaal_capacity = st.number_input("Capaciteit van het gemaal (m³/h):", value=10.0, min_value=0.0)
+werkuren = st.number_input("Aantal werkuren van het gemaal:", value=10, min_value=0)
+
+if st.button("Visualiseer Dijk"):
+    draw_dijk_3d(grondtype, neerslag / 100, gemaal_capacity, werkuren)
